@@ -1,114 +1,221 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { 
-  Zap, 
-  Clock, 
-  FileText, 
-  RotateCcw,
-} from 'lucide-vue-next'
+import { usePrayerStore } from '~/stores/prayerStore'
 
 useSeoMeta({
-  title: 'Fit-Z Counter',
-  description: 'A mobile-friendly counter app',
+  title: 'Vitality Prayer — Rakat Tracker',
+  description: 'Track your daily prayers with precision. A phase-based Rakat counter for all 5 daily prayers.',
 })
 
-const count = ref(0)
+const store = usePrayerStore()
 
-const increment = () => {
-  count.value++
+const showCanvas = ref(false)
+const showComplete = ref(false)
+
+function startPrayer(prayerId: string) {
+  store.selectPrayer(prayerId)
+  showCanvas.value = true
+  showComplete.value = false
 }
 
-const reset = () => {
-  count.value = 0
+function onPrayerComplete() {
+  showComplete.value = true
+  showCanvas.value = false
+}
+
+function onBackToDashboard() {
+  showComplete.value = false
+  showCanvas.value = false
 }
 </script>
 
 <template>
-  <main class="min-h-screen bg-[#F3F4F6] flex justify-center">
-    <!-- Mobile Container -->
-    <div class="w-full max-w-md min-h-screen bg-[#F3F4F6] flex flex-col relative shadow-2xl">
-      
-      <!-- Header -->
-      <header class="flex items-center justify-between px-4 py-4 bg-white/80 backdrop-blur-sm">
-        <div class="flex items-center gap-2">
-          <div class="flex size-9 items-center justify-center rounded-xl bg-red-100 text-red-500">
-            <Zap class="size-5 fill-current" />
-          </div>
-          <span class="text-xl font-bold text-indigo-600">Fit-Z</span>
-        </div>
-        
-      </header>
+  <main class="min-h-screen bg-[#080c14] flex justify-center">
+    <div class="w-full max-w-md min-h-screen relative overflow-hidden">
 
-      <!-- Main Counter Area -->
-      <div class="flex-1 flex flex-col items-center justify-center px-6 py-8">
-        <!-- Counter Circle (Clickable) -->
-        <div class="relative mb-8">
+      <!-- ── PRAYER CANVAS (immersive counter) ── -->
+      <Transition name="slide-in">
+        <PrayerCanvas
+          v-if="showCanvas"
+          class="fixed inset-0 z-40"
+          @complete="onPrayerComplete"
+        />
+      </Transition>
+
+      <!-- ── SESSION COMPLETE OVERLAY ── -->
+      <SessionComplete
+        v-if="showComplete"
+        @back="onBackToDashboard"
+      />
+
+      <!-- ── DASHBOARD ── -->
+      <div class="flex flex-col min-h-screen">
+
+        <!-- Header -->
+        <header class="pt-14 pb-6 px-6">
+          <div class="flex items-center justify-between mb-6">
+            <div>
+              <p class="text-white/40 text-xs uppercase tracking-[0.25em] mb-1">Bismillah</p>
+              <h1 class="text-white text-2xl font-black">Vitality Prayer</h1>
+            </div>
+            <div class="flex flex-col items-end gap-1">
+              <div class="flex gap-1.5">
+                <div
+                  v-for="prayer in store.prayers"
+                  :key="prayer.id"
+                  class="w-2 h-2 rounded-full transition-all duration-500"
+                  :class="
+                    prayer.state === 'completed'
+                      ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50'
+                      : prayer.state === 'in-progress'
+                        ? 'bg-amber-400 animate-pulse'
+                        : 'bg-white/15'
+                  "
+                />
+              </div>
+              <p class="text-white/30 text-xs">{{ store.completedPrayersCount }}/5 today</p>
+            </div>
+          </div>
+
+          <!-- Overall progress bar -->
+          <div class="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+            <div
+              class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-700"
+              :style="{ width: `${(store.completedPrayersCount / 5) * 100}%` }"
+            />
+          </div>
+        </header>
+
+        <!-- Prayer cards -->
+        <div class="flex-1 px-4 pb-8 flex flex-col gap-3">
           <button
-            @click="increment"
-            class="size-48 rounded-full border-[6px] border-indigo-200 flex items-center justify-center bg-white shadow-lg transition-all active:scale-95 hover:bg-indigo-50 cursor-pointer"
+            v-for="prayer in store.prayers"
+            :id="`prayer-btn-${prayer.id}`"
+            :key="prayer.id"
+            class="relative w-full text-left rounded-3xl overflow-hidden transition-all duration-200 active:scale-[0.97]"
+            :class="
+              prayer.state === 'completed'
+                ? 'opacity-70'
+                : 'opacity-100'
+            "
+            @click="startPrayer(prayer.id)"
           >
-            <span class="text-5xl font-bold text-gray-900 tabular-nums">
-              {{ count.toString().padStart(2, '0') }}
-            </span>
+            <!-- Card background -->
+            <div
+              class="absolute inset-0 transition-all duration-300"
+              :class="
+                prayer.state === 'completed'
+                  ? 'bg-emerald-950/60 border border-emerald-500/20'
+                  : prayer.state === 'in-progress'
+                    ? 'bg-amber-950/60 border border-amber-500/30'
+                    : 'bg-white/[0.04] border border-white/10 hover:bg-white/[0.07]'
+              "
+            />
+
+            <div class="relative flex items-center gap-4 px-5 py-4">
+              <!-- Emoji icon -->
+              <div
+                class="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0"
+                :class="
+                  prayer.state === 'completed'
+                    ? 'bg-emerald-500/15'
+                    : prayer.state === 'in-progress'
+                      ? 'bg-amber-500/15'
+                      : 'bg-white/8'
+                "
+              >
+                {{ prayer.icon }}
+              </div>
+
+              <!-- Info -->
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-0.5">
+                  <span class="text-white font-bold text-lg">{{ prayer.name }}</span>
+                  <span class="text-white/30 text-sm">{{ prayer.arabicName }}</span>
+                </div>
+                <!-- Phase pills -->
+                <div class="flex gap-1.5 flex-wrap">
+                  <span
+                    v-for="(phase, i) in prayer.phases"
+                    :key="i"
+                    class="text-xs px-2 py-0.5 rounded-full"
+                    :class="
+                      phase.type === 'fardh'
+                        ? 'bg-emerald-500/15 text-emerald-400'
+                        : phase.type === 'witr'
+                          ? 'bg-violet-500/15 text-violet-400'
+                          : phase.type === 'nafl'
+                            ? 'bg-sky-500/15 text-sky-400'
+                            : 'bg-amber-500/15 text-amber-400'
+                    "
+                  >
+                    {{ phase.label }} ×{{ phase.total }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- Status badge -->
+              <div class="flex-shrink-0">
+                <div
+                  v-if="prayer.state === 'completed'"
+                  class="w-9 h-9 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center"
+                >
+                  <span class="text-emerald-400 text-lg">✓</span>
+                </div>
+                <div
+                  v-else-if="prayer.state === 'in-progress'"
+                  class="w-9 h-9 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center animate-pulse"
+                >
+                  <span class="text-amber-400 text-base">▶</span>
+                </div>
+                <div
+                  v-else
+                  class="w-9 h-9 rounded-full bg-white/5 border border-white/15 flex items-center justify-center"
+                >
+                  <span class="text-white/30 text-base">›</span>
+                </div>
+              </div>
+            </div>
           </button>
-          <!-- Progress Ring (decorative) -->
-          <svg class="absolute inset-0 size-48 -rotate-90 pointer-events-none" viewBox="0 0 100 100">
-            <circle
-              cx="50"
-              cy="50"
-              r="46"
-              fill="none"
-              stroke="#E0E7FF"
-              stroke-width="4"
-            />
-            <circle
-              cx="50"
-              cy="50"
-              r="46"
-              fill="none"
-              stroke="#6366F1"
-              stroke-width="4"
-              stroke-linecap="round"
-              :stroke-dasharray="289"
-              :stroke-dashoffset="289 - (count % 100) * 2.89"
-              class="transition-all duration-500"
-            />
-          </svg>
         </div>
 
-        <!-- Reset Button -->
-        <div class="w-full max-w-xs">
-          <Button
-            @click="reset"
-            variant="outline"
-            size="lg"
-            class="w-full h-12 rounded-2xl text-gray-600 border-gray-300 hover:bg-gray-100 transition-all"
-          >
-            <RotateCcw class="size-4 mr-2" />
-            Reset
-          </Button>
-        </div>
-      </div>
-
-      <!-- Bottom Navigation -->
-      <nav class="flex items-center justify-around bg-white py-3 px-4 border-t border-gray-200">
-        <button class="flex flex-col items-center gap-1 text-indigo-500">
-          <Clock class="size-6" />
-          <span class="text-xs font-medium">Timer</span>
-        </button>
-        <button class="flex flex-col items-center gap-1 text-gray-400 hover:text-gray-600">
-          <FileText class="size-6" />
-          <span class="text-xs font-medium">Plans</span>
-        </button>
-        <button class="flex flex-col items-center gap-1 text-gray-400 hover:text-gray-600">
-          <div class="flex gap-0.5">
-            <div class="size-1.5 rounded-full bg-red-400"></div>
-            <div class="size-1.5 rounded-full bg-amber-400"></div>
-            <div class="size-1.5 rounded-full bg-green-400"></div>
+        <!-- Bottom nav -->
+        <nav class="px-4 pb-8">
+          <div class="bg-white/5 border border-white/10 rounded-3xl px-4 py-3 flex items-center justify-around backdrop-blur-sm">
+            <button
+              id="nav-home"
+              class="flex flex-col items-center gap-1 text-white"
+            >
+              <span class="text-xl">🕌</span>
+              <span class="text-[10px] font-medium text-white/70">Prayers</span>
+            </button>
+            <button
+              id="nav-reset"
+              class="flex flex-col items-center gap-1 text-white/30 hover:text-white/60 transition-colors"
+              @click="store.resetAllPrayers()"
+            >
+              <span class="text-xl">↺</span>
+              <span class="text-[10px] font-medium">Reset</span>
+            </button>
           </div>
-          <span class="text-xs font-medium">History</span>
-        </button>
-      </nav>
+        </nav>
+      </div>
     </div>
   </main>
 </template>
+
+<style scoped>
+.slide-in-enter-active {
+  transition: transform 0.35s cubic-bezier(0.34, 1.1, 0.64, 1), opacity 0.3s ease;
+}
+.slide-in-leave-active {
+  transition: transform 0.25s ease-in, opacity 0.2s ease;
+}
+.slide-in-enter-from {
+  transform: translateY(100%);
+  opacity: 0;
+}
+.slide-in-leave-to {
+  transform: translateY(100%);
+  opacity: 0;
+}
+</style>

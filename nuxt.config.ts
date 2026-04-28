@@ -8,7 +8,7 @@ export default defineNuxtConfig({
   vite: {
     plugins: [tailwindcss()],
   },
-  modules: ['shadcn-nuxt'],
+  modules: ['shadcn-nuxt', '@pinia/nuxt'],
   shadcn: {
     prefix: '',
     componentDir: './app/components/ui',
