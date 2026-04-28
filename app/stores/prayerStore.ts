@@ -12,12 +12,15 @@ export interface Phase {
   type: PhaseType
 }
 
-export interface Prayer {
+export interface PrayerDef {
   id: string
   name: string
   arabicName: string
   icon: string
   phases: Phase[]
+}
+
+export interface Prayer extends PrayerDef {
   state: PrayerState
   completedAt?: string
 }
@@ -31,9 +34,9 @@ export interface SessionState {
   totalRakatsPrayed: number
 }
 
-// ─── Prayer Definitions ───────────────────────────────────────────────────────
+// ─── Defaults ─────────────────────────────────────────────────────────────────
 
-const DEFAULT_PRAYERS: Omit<Prayer, 'state' | 'completedAt'>[] = [
+export const DEFAULT_PRAYER_DEFS: PrayerDef[] = [
   {
     id: 'fajr',
     name: 'Fajr',
@@ -94,33 +97,47 @@ const DEFAULT_PRAYERS: Omit<Prayer, 'state' | 'completedAt'>[] = [
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getTodayKey(): string {
-  return new Date().toISOString().slice(0, 10) // "YYYY-MM-DD"
+  return new Date().toISOString().slice(0, 10)
 }
 
-function buildFreshPrayers(): Prayer[] {
-  return DEFAULT_PRAYERS.map(p => ({ ...p, state: 'idle' as PrayerState }))
+function cloneDefs(defs: PrayerDef[]): PrayerDef[] {
+  return defs.map(d => ({ ...d, phases: d.phases.map(ph => ({ ...ph })) }))
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 
 export const usePrayerStore = defineStore('prayer', () => {
-  // Persisted daily completion (reset each new day)
-  const storedDaily = useLocalStorage<{ date: string; prayers: Prayer[] }>(
-    'vitality-prayer-daily',
-    { date: getTodayKey(), prayers: buildFreshPrayers() },
+  // ── Persisted: editable plan definitions ────────────────────────────────────
+  const customPrayerDefs = useLocalStorage<PrayerDef[]>(
+    'vitality-prayer-defs',
+    cloneDefs(DEFAULT_PRAYER_DEFS),
   )
 
-  // Reset daily progress if it's a new day
+  // ── Persisted: daily completion statuses ────────────────────────────────────
+  const dailyStatus = useLocalStorage<{
+    date: string
+    statuses: Record<string, { state: PrayerState; completedAt?: string }>
+  }>('vitality-prayer-daily', { date: getTodayKey(), statuses: {} })
+
   function ensureTodayData() {
-    if (storedDaily.value.date !== getTodayKey()) {
-      storedDaily.value = { date: getTodayKey(), prayers: buildFreshPrayers() }
+    if (dailyStatus.value.date !== getTodayKey()) {
+      dailyStatus.value = { date: getTodayKey(), statuses: {} }
     }
   }
   ensureTodayData()
 
-  const prayers = computed(() => storedDaily.value.prayers)
+  // ── Computed: merged prayer list ─────────────────────────────────────────────
+  const prayers = computed<Prayer[]>(() => {
+    ensureTodayData()
+    return customPrayerDefs.value.map(def => ({
+      ...def,
+      phases: def.phases.map(ph => ({ ...ph })),
+      state: dailyStatus.value.statuses[def.id]?.state ?? 'idle',
+      completedAt: dailyStatus.value.statuses[def.id]?.completedAt,
+    }))
+  })
 
-  // Active session state (not persisted — resets on app restart)
+  // ── Session state (not persisted) ───────────────────────────────────────────
   const session = ref<SessionState>({
     activePrayerId: null,
     currentPhaseIndex: 0,
@@ -130,10 +147,10 @@ export const usePrayerStore = defineStore('prayer', () => {
     totalRakatsPrayed: 0,
   })
 
-  // ─── Derived ────────────────────────────────────────────────────────────────
+  // ── Derived ─────────────────────────────────────────────────────────────────
 
-  const activePrayer = computed<Prayer | null>(() =>
-    prayers.value.find(p => p.id === session.value.activePrayerId) ?? null,
+  const activePrayer = computed<Prayer | null>(
+    () => prayers.value.find(p => p.id === session.value.activePrayerId) ?? null,
   )
 
   const currentPhase = computed<Phase | null>(() => {
@@ -146,23 +163,14 @@ export const usePrayerStore = defineStore('prayer', () => {
     return (session.value.currentRakatCount / currentPhase.value.total) * 100
   })
 
-  const overallProgressPercent = computed<number>(() => {
-    if (!activePrayer.value) return 0
-    const totalPhases = activePrayer.value.phases.length
-    const phaseProgress = session.value.currentPhaseIndex / totalPhases
-    const withinPhase = currentPhase.value
-      ? session.value.currentRakatCount / currentPhase.value.total / totalPhases
-      : 0
-    return Math.min((phaseProgress + withinPhase) * 100, 100)
-  })
-
-  const completedPrayersCount = computed(() =>
-    prayers.value.filter(p => p.state === 'completed').length,
+  const completedPrayersCount = computed(
+    () => prayers.value.filter(p => p.state === 'completed').length,
   )
 
-  // ─── Actions ─────────────────────────────────────────────────────────────────
+  // ── Session actions ──────────────────────────────────────────────────────────
 
   function selectPrayer(prayerId: string) {
+    ensureTodayData()
     session.value = {
       activePrayerId: prayerId,
       currentPhaseIndex: 0,
@@ -171,10 +179,10 @@ export const usePrayerStore = defineStore('prayer', () => {
       sessionCompleted: false,
       totalRakatsPrayed: 0,
     }
-    // Mark as in-progress
-    const idx = storedDaily.value.prayers.findIndex(p => p.id === prayerId)
-    if (idx !== -1 && storedDaily.value.prayers[idx].state === 'idle') {
-      storedDaily.value.prayers[idx].state = 'in-progress'
+    if (!dailyStatus.value.statuses[prayerId]) {
+      dailyStatus.value.statuses[prayerId] = { state: 'in-progress' }
+    } else if (dailyStatus.value.statuses[prayerId].state === 'idle') {
+      dailyStatus.value.statuses[prayerId].state = 'in-progress'
     }
   }
 
@@ -184,25 +192,21 @@ export const usePrayerStore = defineStore('prayer', () => {
     session.value.currentRakatCount++
     session.value.totalRakatsPrayed++
 
-    // Check phase completion
     if (session.value.currentRakatCount >= currentPhase.value.total) {
-      const nextPhaseIndex = session.value.currentPhaseIndex + 1
+      const nextIndex = session.value.currentPhaseIndex + 1
 
-      if (nextPhaseIndex >= activePrayer.value.phases.length) {
-        // Prayer complete!
-        const idx = storedDaily.value.prayers.findIndex(
-          p => p.id === session.value.activePrayerId,
-        )
-        if (idx !== -1) {
-          storedDaily.value.prayers[idx].state = 'completed'
-          storedDaily.value.prayers[idx].completedAt = new Date().toISOString()
+      if (nextIndex >= activePrayer.value.phases.length) {
+        const id = session.value.activePrayerId!
+        ensureTodayData()
+        dailyStatus.value.statuses[id] = {
+          state: 'completed',
+          completedAt: new Date().toISOString(),
         }
         session.value.sessionCompleted = true
         return 'prayer-complete'
       }
 
-      // Move to next phase
-      session.value.currentPhaseIndex = nextPhaseIndex
+      session.value.currentPhaseIndex = nextIndex
       session.value.currentRakatCount = 0
       return 'phase-complete'
     }
@@ -222,21 +226,49 @@ export const usePrayerStore = defineStore('prayer', () => {
   }
 
   function resetAllPrayers() {
-    storedDaily.value = { date: getTodayKey(), prayers: buildFreshPrayers() }
+    ensureTodayData()
+    dailyStatus.value = { date: getTodayKey(), statuses: {} }
     dismissSession()
+  }
+
+  // ── Plan editing actions ─────────────────────────────────────────────────────
+
+  function updatePrayerPhases(prayerId: string, phases: Phase[]) {
+    const idx = customPrayerDefs.value.findIndex(p => p.id === prayerId)
+    if (idx === -1) return
+    customPrayerDefs.value = customPrayerDefs.value.map((def, i) =>
+      i === idx ? { ...def, phases: phases.map(ph => ({ ...ph })) } : def,
+    )
+  }
+
+  function resetPrayerToDefault(prayerId: string) {
+    const def = DEFAULT_PRAYER_DEFS.find(p => p.id === prayerId)
+    if (!def) return
+    const idx = customPrayerDefs.value.findIndex(p => p.id === prayerId)
+    if (idx === -1) return
+    customPrayerDefs.value = customPrayerDefs.value.map((d, i) =>
+      i === idx ? cloneDefs([def])[0] : d,
+    )
+  }
+
+  function resetAllPlansToDefault() {
+    customPrayerDefs.value = cloneDefs(DEFAULT_PRAYER_DEFS)
   }
 
   return {
     prayers,
+    customPrayerDefs,
     session,
     activePrayer,
     currentPhase,
     progressPercent,
-    overallProgressPercent,
     completedPrayersCount,
     selectPrayer,
     incrementRakat,
     dismissSession,
     resetAllPrayers,
+    updatePrayerPhases,
+    resetPrayerToDefault,
+    resetAllPlansToDefault,
   }
 })

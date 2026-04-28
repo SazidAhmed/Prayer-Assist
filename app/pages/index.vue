@@ -10,6 +10,7 @@ const store = usePrayerStore()
 
 const showCanvas = ref(false)
 const showComplete = ref(false)
+const showPlans = ref(false)
 
 function startPrayer(prayerId: string) {
   store.selectPrayer(prayerId)
@@ -33,7 +34,7 @@ function onBackToDashboard() {
     <div class="w-full max-w-md min-h-screen relative overflow-hidden">
 
       <!-- ── PRAYER CANVAS (immersive counter) ── -->
-      <Transition name="slide-in">
+      <Transition name="slide-up">
         <PrayerCanvas
           v-if="showCanvas"
           class="fixed inset-0 z-40"
@@ -46,6 +47,14 @@ function onBackToDashboard() {
         v-if="showComplete"
         @back="onBackToDashboard"
       />
+
+      <!-- ── PLAN EDITOR ── -->
+      <Transition name="slide-up">
+        <PlanEditor
+          v-if="showPlans"
+          @close="showPlans = false"
+        />
+      </Transition>
 
       <!-- ── DASHBOARD ── -->
       <div class="flex flex-col min-h-screen">
@@ -86,20 +95,15 @@ function onBackToDashboard() {
         </header>
 
         <!-- Prayer cards -->
-        <div class="flex-1 px-4 pb-8 flex flex-col gap-3">
+        <div class="flex-1 px-4 pb-4 flex flex-col gap-3">
           <button
             v-for="prayer in store.prayers"
             :id="`prayer-btn-${prayer.id}`"
             :key="prayer.id"
             class="relative w-full text-left rounded-3xl overflow-hidden transition-all duration-200 active:scale-[0.97]"
-            :class="
-              prayer.state === 'completed'
-                ? 'opacity-70'
-                : 'opacity-100'
-            "
+            :class="prayer.state === 'completed' ? 'opacity-70' : 'opacity-100'"
             @click="startPrayer(prayer.id)"
           >
-            <!-- Card background -->
             <div
               class="absolute inset-0 transition-all duration-300"
               :class="
@@ -112,7 +116,6 @@ function onBackToDashboard() {
             />
 
             <div class="relative flex items-center gap-4 px-5 py-4">
-              <!-- Emoji icon -->
               <div
                 class="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0"
                 :class="
@@ -126,13 +129,11 @@ function onBackToDashboard() {
                 {{ prayer.icon }}
               </div>
 
-              <!-- Info -->
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 mb-0.5">
                   <span class="text-white font-bold text-lg">{{ prayer.name }}</span>
                   <span class="text-white/30 text-sm">{{ prayer.arabicName }}</span>
                 </div>
-                <!-- Phase pills -->
                 <div class="flex gap-1.5 flex-wrap">
                   <span
                     v-for="(phase, i) in prayer.phases"
@@ -153,7 +154,6 @@ function onBackToDashboard() {
                 </div>
               </div>
 
-              <!-- Status badge -->
               <div class="flex-shrink-0">
                 <div
                   v-if="prayer.state === 'completed'"
@@ -179,14 +179,25 @@ function onBackToDashboard() {
         </div>
 
         <!-- Bottom nav -->
-        <nav class="px-4 pb-8">
+        <nav class="px-4 pb-8 pt-2">
           <div class="bg-white/5 border border-white/10 rounded-3xl px-4 py-3 flex items-center justify-around backdrop-blur-sm">
             <button
               id="nav-home"
-              class="flex flex-col items-center gap-1 text-white"
+              class="flex flex-col items-center gap-1"
+              :class="!showPlans ? 'text-white' : 'text-white/30'"
+              @click="showPlans = false"
             >
               <span class="text-xl">🕌</span>
-              <span class="text-[10px] font-medium text-white/70">Prayers</span>
+              <span class="text-[10px] font-medium">Prayers</span>
+            </button>
+            <button
+              id="nav-plans"
+              class="flex flex-col items-center gap-1 transition-colors"
+              :class="showPlans ? 'text-white' : 'text-white/30 hover:text-white/60'"
+              @click="showPlans = true"
+            >
+              <span class="text-xl">✏️</span>
+              <span class="text-[10px] font-medium">My Plan</span>
             </button>
             <button
               id="nav-reset"
@@ -194,7 +205,7 @@ function onBackToDashboard() {
               @click="store.resetAllPrayers()"
             >
               <span class="text-xl">↺</span>
-              <span class="text-[10px] font-medium">Reset</span>
+              <span class="text-[10px] font-medium">Reset Day</span>
             </button>
           </div>
         </nav>
@@ -204,17 +215,17 @@ function onBackToDashboard() {
 </template>
 
 <style scoped>
-.slide-in-enter-active {
+.slide-up-enter-active {
   transition: transform 0.35s cubic-bezier(0.34, 1.1, 0.64, 1), opacity 0.3s ease;
 }
-.slide-in-leave-active {
+.slide-up-leave-active {
   transition: transform 0.25s ease-in, opacity 0.2s ease;
 }
-.slide-in-enter-from {
+.slide-up-enter-from {
   transform: translateY(100%);
   opacity: 0;
 }
-.slide-in-leave-to {
+.slide-up-leave-to {
   transform: translateY(100%);
   opacity: 0;
 }
