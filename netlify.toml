@@ -1,19 +1,8 @@
 [build]
   command = "npm run generate"
-  publish = "dist"
-
-[[redirects]]
-  from = "/_nuxt/*"
-  to = "/_nuxt/:splat"
-  status = 200
-
-[[redirects]]
-  from = "/assets/*"
-  to = "/assets/:splat"
-  status = 200
+  publish = ".output/public"
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-  force = true
