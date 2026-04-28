@@ -14,6 +14,6 @@ export default defineNuxtConfig({
     componentDir: './app/components/ui',
   },
   nitro: {
-    preset: 'netlify_static',
+    preset: 'static',
   },
 })
