@@ -31,6 +31,7 @@ export interface SessionState {
   currentRakatCount: number
   sessionStartTime: number | null
   sessionCompleted: boolean
+  phaseCompleted: boolean
   totalRakatsPrayed: number
 }
 
@@ -144,6 +145,7 @@ export const usePrayerStore = defineStore('prayer', () => {
     currentRakatCount: 0,
     sessionStartTime: null,
     sessionCompleted: false,
+    phaseCompleted: false,
     totalRakatsPrayed: 0,
   })
 
@@ -177,6 +179,7 @@ export const usePrayerStore = defineStore('prayer', () => {
       currentRakatCount: 0,
       sessionStartTime: Date.now(),
       sessionCompleted: false,
+      phaseCompleted: false,
       totalRakatsPrayed: 0,
     }
     if (!dailyStatus.value.statuses[prayerId]) {
@@ -206,12 +209,27 @@ export const usePrayerStore = defineStore('prayer', () => {
         return 'prayer-complete'
       }
 
-      session.value.currentPhaseIndex = nextIndex
-      session.value.currentRakatCount = 0
+      session.value.phaseCompleted = true
       return 'phase-complete'
     }
 
     return 'rakat'
+  }
+
+  function startNextPhase(): boolean {
+    if (!session.value.phaseCompleted) return false
+    if (!activePrayer.value) return false
+
+    const nextIndex = session.value.currentPhaseIndex + 1
+
+    if (nextIndex >= activePrayer.value.phases.length) {
+      return false
+    }
+
+    session.value.currentPhaseIndex = nextIndex
+    session.value.currentRakatCount = 0
+    session.value.phaseCompleted = false
+    return true
   }
 
   function dismissSession() {
@@ -221,6 +239,7 @@ export const usePrayerStore = defineStore('prayer', () => {
       currentRakatCount: 0,
       sessionStartTime: null,
       sessionCompleted: false,
+      phaseCompleted: false,
       totalRakatsPrayed: 0,
     }
   }
@@ -265,6 +284,7 @@ export const usePrayerStore = defineStore('prayer', () => {
     completedPrayersCount,
     selectPrayer,
     incrementRakat,
+    startNextPhase,
     dismissSession,
     resetAllPrayers,
     updatePrayerPhases,

@@ -33,8 +33,16 @@ const isFlashing = ref(false)
 const isPhaseFlashing = ref(false)
 const tapScale = ref(false)
 
+function handleContinue() {
+  store.startNextPhase()
+}
+
 async function handleTap() {
   if (store.session.sessionCompleted) return
+  if (store.session.phaseCompleted) {
+    handleContinue()
+    return
+  }
 
   // Tap animation
   tapScale.value = true
@@ -57,11 +65,26 @@ async function handleTap() {
   }
 }
 
+// ─── Phase completion state ──────────────────────────────────────────────────
+const isPhaseComplete = computed(() => store.session.phaseCompleted)
+
+const nextPhase = computed(() => {
+  if (!store.activePrayer) return null
+  const nextIndex = store.session.currentPhaseIndex + 1
+  return store.activePrayer.phases[nextIndex] ?? null
+})
+
 // ─── Phase label ─────────────────────────────────────────────────────────────
 const phaseLabel = computed(() => {
   const phase = store.currentPhase
   if (!phase) return ''
-  return `${phase.label} — ${store.session.currentRakatCount + 1} of ${phase.total}`
+  return `${phase.label} — ${store.session.currentRakatCount} of ${phase.total}`
+})
+
+const completedPhaseLabel = computed(() => {
+  const phase = store.currentPhase
+  if (!phase) return ''
+  return `${phase.label} ${phase.total} of ${phase.total}`
 })
 
 const phaseTypeColor = computed(() => {
@@ -187,8 +210,49 @@ const phaseGlow = computed(() => {
     </div>
 
     <!-- Bottom hint -->
+    <!-- Phase completion overlay -->
+    <Transition name="fade">
+      <div
+        v-if="isPhaseComplete"
+        class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#080c14]/95 backdrop-blur-sm"
+      >
+        <div class="flex flex-col items-center gap-8 px-8">
+          <!-- Completed checkmark -->
+          <div
+            class="w-24 h-24 rounded-full bg-emerald-500/20 border-2 border-emerald-500/50 flex items-center justify-center"
+          >
+            <span class="text-5xl text-emerald-400">✓</span>
+          </div>
+
+          <!-- Completed text -->
+          <div class="text-center">
+            <p class="text-emerald-400 text-sm uppercase tracking-widest mb-2">Completed</p>
+            <p class="text-white text-2xl font-bold">{{ completedPhaseLabel }}</p>
+          </div>
+
+          <!-- Next phase preview -->
+          <div
+            v-if="nextPhase"
+            class="bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-center"
+          >
+            <p class="text-white/40 text-xs uppercase tracking-widest mb-1">Next</p>
+            <p class="text-white font-semibold">{{ nextPhase.label }}</p>
+            <p class="text-white/50 text-sm">{{ nextPhase.total }} rakat</p>
+          </div>
+
+          <!-- Continue button -->
+          <button
+            class="bg-white text-[#080c14] px-8 py-4 rounded-full font-bold text-lg transition-transform active:scale-95 hover:bg-white/90"
+            @click.stop="handleContinue"
+          >
+            Start {{ nextPhase?.label || 'Next' }} →
+          </button>
+        </div>
+      </div>
+    </Transition>
+
     <div class="absolute bottom-10 left-0 right-0 flex flex-col items-center pointer-events-none">
-      <p class="text-white/20 text-sm animate-pulse">Tap anywhere to count</p>
+      <p v-if="!isPhaseComplete" class="text-white/20 text-sm animate-pulse">Tap anywhere to count</p>
     </div>
   </div>
 </template>
@@ -219,5 +283,15 @@ const phaseGlow = computed(() => {
 .pop-leave-to {
   opacity: 0;
   transform: scale(1.3);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>
