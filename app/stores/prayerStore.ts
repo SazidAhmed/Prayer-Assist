@@ -50,7 +50,61 @@ export interface DailyHistory {
 
 // ─── Defaults ─────────────────────────────────────────────────────────────────
 
-export const DEFAULT_PRAYER_DEFS: PrayerDef[] = []
+export const DEFAULT_PRAYER_DEFS: PrayerDef[] = [
+  {
+    id: 'fajr',
+    name: 'Fajr',
+    arabicName: 'الفجر',
+    icon: '🌅',
+    phases: [
+      { label: 'Sunnah', total: 2, type: 'sunnah' },
+      { label: 'Fardh', total: 2, type: 'fardh' },
+    ],
+  },
+  {
+    id: 'dhuhr',
+    name: 'Dhuhr',
+    arabicName: 'الظهر',
+    icon: '☀️',
+    phases: [
+      { label: 'Sunnah', total: 4, type: 'sunnah' },
+      { label: 'Fardh', total: 4, type: 'fardh' },
+      { label: 'Sunnah', total: 2, type: 'sunnah' },
+    ],
+  },
+  {
+    id: 'asr',
+    name: 'Asr',
+    arabicName: 'العصر',
+    icon: '🌤️',
+    phases: [
+      { label: 'Sunnah', total: 4, type: 'sunnah' },
+      { label: 'Fardh', total: 4, type: 'fardh' },
+    ],
+  },
+  {
+    id: 'maghrib',
+    name: 'Maghrib',
+    arabicName: 'المغرب',
+    icon: '🌇',
+    phases: [
+      { label: 'Fardh', total: 3, type: 'fardh' },
+      { label: 'Sunnah', total: 2, type: 'sunnah' },
+    ],
+  },
+  {
+    id: 'isha',
+    name: 'Isha',
+    arabicName: 'العشاء',
+    icon: '🌙',
+    phases: [
+      { label: 'Sunnah', total: 4, type: 'sunnah' },
+      { label: 'Fardh', total: 4, type: 'fardh' },
+      { label: 'Sunnah', total: 2, type: 'sunnah' },
+      { label: 'Witr', total: 3, type: 'witr' },
+    ],
+  },
+]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -64,7 +118,7 @@ export const usePrayerStore = defineStore('prayer', () => {
   // ── Persisted: editable plan definitions ────────────────────────────────────
   const customPrayerDefs = useLocalStorage<PrayerDef[]>(
     'vitality-prayer-defs',
-    [],
+    DEFAULT_PRAYER_DEFS,
   )
 
   // ── Persisted: daily completion statuses ────────────────────────────────────
@@ -196,7 +250,9 @@ export const usePrayerStore = defineStore('prayer', () => {
   // ── Computed: merged prayer list ─────────────────────────────────────────────
   const prayers = computed<Prayer[]>(() => {
     ensureTodayData()
-    return customPrayerDefs.value.map(def => ({
+    // Use defaults if user has no custom prayers
+    const defs = customPrayerDefs.value.length > 0 ? customPrayerDefs.value : DEFAULT_PRAYER_DEFS
+    return defs.map(def => ({
       ...def,
       phases: applyTravelerMode(def.phases.map(ph => ({ ...ph }))),
       state: dailyStatus.value.statuses[def.id]?.state ?? 'idle',
@@ -390,13 +446,22 @@ export const usePrayerStore = defineStore('prayer', () => {
   }
 
   function resetPrayerToDefault(prayerId: string) {
-    // No defaults available - user creates all prayers
-    console.log('No preset prayers available')
+    const defaultDef = DEFAULT_PRAYER_DEFS.find(p => p.id === prayerId)
+    if (!defaultDef) return
+    const idx = customPrayerDefs.value.findIndex(p => p.id === prayerId)
+    if (idx === -1) {
+      // Add it if missing
+      customPrayerDefs.value = [...customPrayerDefs.value, JSON.parse(JSON.stringify(defaultDef))]
+    } else {
+      // Replace with default
+      customPrayerDefs.value = customPrayerDefs.value.map((def, i) =>
+        i === idx ? JSON.parse(JSON.stringify(defaultDef)) : def,
+      )
+    }
   }
 
   function resetAllPlansToDefault() {
-    // No defaults available - user creates all prayers
-    console.log('No preset prayers available')
+    customPrayerDefs.value = JSON.parse(JSON.stringify(DEFAULT_PRAYER_DEFS))
   }
 
   // ── Settings actions ─────────────────────────────────────────────────────────

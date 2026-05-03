@@ -54,6 +54,7 @@ function onBackToDashboard() {
           @complete="onPrayerComplete"
           @open-plans="showCanvas = false; showPlans = true"
           @open-settings="showCanvas = false; showSettings = true"
+          @switch-prayer="() => {}"
         />
       </Transition>
 

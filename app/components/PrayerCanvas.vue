@@ -2,7 +2,14 @@
 import { usePrayerStore } from '~/stores/prayerStore'
 
 const store = usePrayerStore()
-const emit = defineEmits<{ complete: []; openPlans: []; openSettings: [] }>()
+const emit = defineEmits<{ complete: []; openPlans: []; openSettings: []; switchPrayer: [prayerId: string] }>()
+
+// ─── Prayer switching ────────────────────────────────────────────────────────
+function switchToPrayer(prayerId: string) {
+  if (prayerId === store.session.activePrayerId) return
+  store.selectPrayer(prayerId)
+  emit('switchPrayer', prayerId)
+}
 
 // ─── Wake Lock ───────────────────────────────────────────────────────────────
 let wakeLock: WakeLockSentinel | null = null
@@ -351,32 +358,38 @@ const phaseGlow = computed(() => {
       <p v-if="!isPhaseComplete" class="text-white/20 text-sm animate-pulse">Tap anywhere to count</p>
     </div>
 
-    <!-- Bottom nav -->
+    <!-- Prayer navigation -->
     <nav class="absolute bottom-0 left-0 right-0 px-4 pb-8 pt-2 z-30">
-      <div class="bg-white/5 border border-white/10 rounded-3xl px-4 py-3 flex items-center justify-around backdrop-blur-sm">
+      <div class="bg-white/5 border border-white/10 rounded-3xl px-3 py-3 flex items-center justify-around backdrop-blur-sm">
         <button
-          class="flex flex-col items-center gap-1 text-white transition-colors"
-          @click.stop="emit('openPlans')"
-          @touchend.prevent.stop="emit('openPlans')"
+          v-for="prayer in store.prayers"
+          :key="prayer.id"
+          class="flex flex-col items-center gap-1 transition-colors"
+          :class="[
+            prayer.id === store.session.activePrayerId
+              ? 'text-white scale-110'
+              : prayer.state === 'completed'
+                ? 'text-emerald-400'
+                : prayer.state === 'in-progress'
+                  ? 'text-amber-400'
+                  : 'text-white/30 hover:text-white/60',
+          ]"
+          @click.stop="switchToPrayer(prayer.id)"
+          @touchend.prevent.stop="switchToPrayer(prayer.id)"
         >
-          <span class="text-xl">✏️</span>
-          <span class="text-[10px] font-medium">My Plan</span>
+          <span class="text-xl">{{ prayer.icon }}</span>
+          <span class="text-[9px] font-medium">{{ prayer.name }}</span>
         </button>
+
+        <div class="w-px h-8 bg-white/10 mx-1" />
+
         <button
           class="flex flex-col items-center gap-1 text-white/30 hover:text-white transition-colors"
           @click.stop="emit('openSettings')"
           @touchend.prevent.stop="emit('openSettings')"
         >
           <span class="text-xl">⚙️</span>
-          <span class="text-[10px] font-medium">Settings</span>
-        </button>
-        <button
-          class="flex flex-col items-center gap-1 text-white/30 hover:text-white transition-colors"
-          @click.stop="store.dismissSession(); emit('complete')"
-          @touchend.prevent.stop="store.dismissSession(); emit('complete')"
-        >
-          <span class="text-xl">✕</span>
-          <span class="text-[10px] font-medium">End</span>
+          <span class="text-[9px] font-medium">Settings</span>
         </button>
       </div>
     </nav>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { usePrayerStore, type Phase, type PhaseType } from '~/stores/prayerStore'
+import { usePrayerStore, DEFAULT_PRAYER_DEFS, type Phase, type PhaseType } from '~/stores/prayerStore'
 
 const store = usePrayerStore()
 const emit = defineEmits<{ close: [] }>()
@@ -84,11 +84,22 @@ function onAddPrayer() {
   newArabic.value = ''
 }
 
+const DEFAULT_PRAYER_IDS = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha']
+
+function isDefaultPrayer(prayerId: string): boolean {
+  return DEFAULT_PRAYER_IDS.includes(prayerId)
+}
+
 function onDeletePrayer(prayerId: string) {
+  if (isDefaultPrayer(prayerId)) return
   store.deletePrayer(prayerId)
   if (expandedId.value === prayerId) {
     expandedId.value = null
   }
+}
+
+function resetToDefaults() {
+  store.customPrayerDefs = JSON.parse(JSON.stringify(DEFAULT_PRAYER_DEFS))
 }
 
 const ICONS = ['🌅', '☀️', '🌤️', '🌇', '🌙', '✨', '🌟', '☪️', '🕌', '📿']
@@ -183,24 +194,14 @@ function addTemplate(template: typeof QUICK_TEMPLATES[0]) {
       <div v-if="store.customPrayerDefs.length === 0" class="text-center py-8">
         <span class="text-4xl mb-3 block">🌅</span>
         <p class="text-white/50 text-sm mb-2">No prayers yet.</p>
-        <p class="text-white/30 text-xs mb-6">Add your first prayer or use a template below.</p>
+        <p class="text-white/30 text-xs mb-6">Add your first prayer or restore defaults.</p>
 
-        <!-- Quick templates -->
-        <div class="flex flex-col gap-2 px-4">
-          <button
-            v-for="template in QUICK_TEMPLATES"
-            :key="template.name"
-            class="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all active:scale-95 text-left"
-            @click="addTemplate(template)"
-          >
-            <span class="text-2xl">{{ template.icon }}</span>
-            <div class="flex-1">
-              <p class="text-white font-medium">{{ template.name }}</p>
-              <p class="text-white/40 text-xs">{{ template.arabic }}</p>
-            </div>
-            <span class="text-white/20 text-xs">{{ template.phases.length }} phases</span>
-          </button>
-        </div>
+        <button
+          class="w-full mx-4 mb-4 px-4 py-3 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 active:scale-95 transition-all font-medium"
+          @click="resetToDefaults"
+        >
+          ✨ Restore Default Prayers
+        </button>
       </div>
 
       <div
@@ -294,8 +295,9 @@ function addTemplate(template: typeof QUICK_TEMPLATES[0]) {
               >
                 + Add Phase
               </button>
-              <!-- Delete prayer -->
+              <!-- Delete prayer (hidden for defaults) -->
               <button
+                v-if="!isDefaultPrayer(def.id)"
                 :id="`delete-prayer-${def.id}`"
                 class="h-9 px-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400/70 hover:text-red-400 hover:bg-red-500/20 active:scale-95 transition-all text-xs"
                 @click="onDeletePrayer(def.id)"
