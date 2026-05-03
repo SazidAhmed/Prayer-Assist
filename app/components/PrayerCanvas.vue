@@ -2,7 +2,7 @@
 import { usePrayerStore } from '~/stores/prayerStore'
 
 const store = usePrayerStore()
-const emit = defineEmits<{ complete: [] }>()
+const emit = defineEmits<{ complete: []; openPlans: []; openSettings: [] }>()
 
 // ─── Wake Lock ───────────────────────────────────────────────────────────────
 let wakeLock: WakeLockSentinel | null = null
@@ -20,12 +20,85 @@ async function releaseWakeLock() {
   wakeLock = null
 }
 
-onMounted(requestWakeLock)
-onUnmounted(releaseWakeLock)
+// ─── Visibility handling for wake lock ───────────────────────────────────────
+function handleVisibilityChange() {
+  if (document.hidden) {
+    // Page is hidden - wake lock will be released by browser
+    console.log('Page hidden - wake lock may be released')
+  } else {
+    // Page is visible again - re-acquire wake lock
+    requestWakeLock()
+  }
+}
+
+onMounted(() => {
+  requestWakeLock()
+  window.addEventListener('keydown', handleKeydown)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+})
+
+onUnmounted(() => {
+  releaseWakeLock()
+  window.removeEventListener('keydown', handleKeydown)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+})
 
 // ─── Haptic feedback ─────────────────────────────────────────────────────────
 function vibrate(pattern: number | number[]) {
+  if (!store.settings.vibrationEnabled) return
   try { navigator.vibrate?.(pattern) } catch { /* ignore */ }
+}
+
+// ─── Sound feedback ──────────────────────────────────────────────────────────
+const audioCtx = ref<AudioContext | null>(null)
+
+function initAudio() {
+  if (!audioCtx.value) {
+    audioCtx.value = new (window.AudioContext || (window as any).webkitAudioContext)()
+  }
+}
+
+function playTone(freq: number, duration: number, type: OscillatorType = 'sine') {
+  if (!store.settings.soundEnabled || !audioCtx.value) return
+  try {
+    const osc = audioCtx.value.createOscillator()
+    const gain = audioCtx.value.createGain()
+    osc.connect(gain)
+    gain.connect(audioCtx.value.destination)
+    osc.type = type
+    osc.frequency.setValueAtTime(freq, audioCtx.value.currentTime)
+    gain.gain.setValueAtTime(0.3, audioCtx.value.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.value.currentTime + duration)
+    osc.start()
+    osc.stop(audioCtx.value.currentTime + duration)
+  } catch { /* ignore */ }
+}
+
+function playPhaseSound(phaseType: string) {
+  switch (phaseType) {
+    case 'fardh': playTone(440, 0.15, 'sine'); setTimeout(() => playTone(440, 0.15), 100); break
+    case 'witr': playTone(523, 0.2, 'triangle'); break
+    case 'nafl': playTone(330, 0.1, 'sine'); break
+    case 'sunnah': playTone(392, 0.15, 'sine'); break
+    default: playTone(392, 0.15)
+  }
+}
+
+function playCompleteSound() {
+  playTone(523, 0.1)
+  setTimeout(() => playTone(659, 0.1), 100)
+  setTimeout(() => playTone(784, 0.2), 200)
+}
+
+// Different vibration patterns per phase type
+function getPhaseVibration(phaseType: string): number[] {
+  switch (phaseType) {
+    case 'fardh': return [40, 30, 40] // Double pulse for Fardh
+    case 'witr': return [50, 50, 50] // Triple for Witr
+    case 'nafl': return [35] // Short for Nafl
+    case 'sunnah': return [40] // Standard for Sunnah
+    default: return [40]
+  }
 }
 
 // ─── Animation state ─────────────────────────────────────────────────────────
@@ -44,6 +117,9 @@ async function handleTap() {
     return
   }
 
+  // Init audio on first interaction
+  initAudio()
+
   // Tap animation
   tapScale.value = true
   setTimeout(() => { tapScale.value = false }, 150)
@@ -51,17 +127,37 @@ async function handleTap() {
   const result = store.incrementRakat()
 
   if (result === 'rakat') {
-    vibrate(40)
+    const phaseType = store.currentPhase?.type ?? 'sunnah'
+    vibrate(getPhaseVibration(phaseType))
+    playPhaseSound(phaseType)
     isFlashing.value = true
     setTimeout(() => { isFlashing.value = false }, 200)
   } else if (result === 'phase-complete') {
-    vibrate([60, 80, 60])
+    const nextType = nextPhase.value?.type ?? 'sunnah'
+    // Stronger pulse for phase transition
+    const transitionPattern: Record<string, number[]> = {
+      'fardh': [80, 100, 80],
+      'witr': [100, 100, 100],
+      'nafl': [60, 60],
+      'sunnah': [70, 70],
+    }
+    vibrate(transitionPattern[nextType] || [70, 70])
+    playPhaseSound(nextType)
     isPhaseFlashing.value = true
     setTimeout(() => { isPhaseFlashing.value = false }, 400)
   } else if (result === 'prayer-complete') {
     vibrate([100, 100, 100, 100, 300])
+    playCompleteSound()
     await releaseWakeLock()
     emit('complete')
+  }
+}
+
+// ─── Keyboard accessibility ──────────────────────────────────────────────────
+function handleKeydown(e: KeyboardEvent) {
+  if (e.code === 'Space' || e.code === 'Enter') {
+    e.preventDefault()
+    handleTap()
   }
 }
 
@@ -254,6 +350,36 @@ const phaseGlow = computed(() => {
     <div class="absolute bottom-10 left-0 right-0 flex flex-col items-center pointer-events-none">
       <p v-if="!isPhaseComplete" class="text-white/20 text-sm animate-pulse">Tap anywhere to count</p>
     </div>
+
+    <!-- Bottom nav -->
+    <nav class="absolute bottom-0 left-0 right-0 px-4 pb-8 pt-2 z-30">
+      <div class="bg-white/5 border border-white/10 rounded-3xl px-4 py-3 flex items-center justify-around backdrop-blur-sm">
+        <button
+          class="flex flex-col items-center gap-1 text-white transition-colors"
+          @click.stop="emit('openPlans')"
+          @touchend.prevent.stop="emit('openPlans')"
+        >
+          <span class="text-xl">✏️</span>
+          <span class="text-[10px] font-medium">My Plan</span>
+        </button>
+        <button
+          class="flex flex-col items-center gap-1 text-white/30 hover:text-white transition-colors"
+          @click.stop="emit('openSettings')"
+          @touchend.prevent.stop="emit('openSettings')"
+        >
+          <span class="text-xl">⚙️</span>
+          <span class="text-[10px] font-medium">Settings</span>
+        </button>
+        <button
+          class="flex flex-col items-center gap-1 text-white/30 hover:text-white transition-colors"
+          @click.stop="store.dismissSession(); emit('complete')"
+          @touchend.prevent.stop="store.dismissSession(); emit('complete')"
+        >
+          <span class="text-xl">✕</span>
+          <span class="text-[10px] font-medium">End</span>
+        </button>
+      </div>
+    </nav>
   </div>
 </template>
 

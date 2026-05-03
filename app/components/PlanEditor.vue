@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { usePrayerStore, type Phase, type PhaseType, DEFAULT_PRAYER_DEFS } from '~/stores/prayerStore'
+import { usePrayerStore, type Phase, type PhaseType } from '~/stores/prayerStore'
 
 const store = usePrayerStore()
 const emit = defineEmits<{ close: [] }>()
@@ -28,10 +28,16 @@ function toggleExpand(id: string) {
 function cycleType(prayerId: string, phaseIdx: number) {
   const def = store.customPrayerDefs.find(p => p.id === prayerId)
   if (!def) return
-  const cur = def.phases[phaseIdx].type
-  const next = PHASE_CYCLE[(PHASE_CYCLE.indexOf(cur) + 1) % PHASE_CYCLE.length]
-  const updated = def.phases.map((ph, i) =>
-    i === phaseIdx ? { ...ph, type: next, label: PHASE_META[next].label } : ph,
+  const phase = def.phases[phaseIdx]
+  if (!phase) return
+  const curIndex = PHASE_CYCLE.indexOf(phase.type)
+  const nextIndex = (curIndex + 1) % PHASE_CYCLE.length
+  const nextType = PHASE_CYCLE[nextIndex]
+  if (!nextType) return
+  const next = nextType
+  const meta = PHASE_META[next]
+  const updated: Phase[] = def.phases.map((ph, i) =>
+    i === phaseIdx ? { ...ph, type: next, label: meta.label } : { ...ph },
   )
   store.updatePrayerPhases(prayerId, updated)
 }
@@ -65,14 +71,89 @@ function totalRakats(prayerId: string) {
   return def?.phases.reduce((s, p) => s + p.total, 0) ?? 0
 }
 
-// ─── Reset confirm ────────────────────────────────────────────────────────────
+// ─── Add new prayer ───────────────────────────────────────────────────────────
 
-const confirmResetAll = ref(false)
+const newName = ref('')
+const newArabic = ref('')
+const newIcon = ref('🌅')
 
-function doResetAll() {
-  store.resetAllPlansToDefault()
-  confirmResetAll.value = false
+function onAddPrayer() {
+  if (!newName.value.trim()) return
+  store.addPrayer(newName.value.trim(), newArabic.value.trim() || '', newIcon.value)
+  newName.value = ''
+  newArabic.value = ''
 }
+
+function onDeletePrayer(prayerId: string) {
+  store.deletePrayer(prayerId)
+  if (expandedId.value === prayerId) {
+    expandedId.value = null
+  }
+}
+
+const ICONS = ['🌅', '☀️', '🌤️', '🌇', '🌙', '✨', '🌟', '☪️', '🕌', '📿']
+
+// ─── Quick templates for onboarding ──────────────────────────────────────────
+
+const QUICK_TEMPLATES = [
+  {
+    name: 'Fajr',
+    arabic: 'الفجر',
+    icon: '🌅',
+    phases: [
+      { label: 'Sunnah', total: 2, type: 'sunnah' as const },
+      { label: 'Fardh', total: 2, type: 'fardh' as const },
+    ],
+  },
+  {
+    name: 'Dhuhr',
+    arabic: 'الظهر',
+    icon: '☀️',
+    phases: [
+      { label: 'Sunnah', total: 4, type: 'sunnah' as const },
+      { label: 'Fardh', total: 4, type: 'fardh' as const },
+      { label: 'Sunnah', total: 2, type: 'sunnah' as const },
+    ],
+  },
+  {
+    name: 'Asr',
+    arabic: 'العصر',
+    icon: '🌤️',
+    phases: [
+      { label: 'Sunnah', total: 4, type: 'sunnah' as const },
+      { label: 'Fardh', total: 4, type: 'fardh' as const },
+    ],
+  },
+  {
+    name: 'Maghrib',
+    arabic: 'المغرب',
+    icon: '🌇',
+    phases: [
+      { label: 'Fardh', total: 3, type: 'fardh' as const },
+      { label: 'Sunnah', total: 2, type: 'sunnah' as const },
+    ],
+  },
+  {
+    name: 'Isha',
+    arabic: 'العشاء',
+    icon: '🌙',
+    phases: [
+      { label: 'Sunnah', total: 4, type: 'sunnah' as const },
+      { label: 'Fardh', total: 4, type: 'fardh' as const },
+      { label: 'Sunnah', total: 2, type: 'sunnah' as const },
+      { label: 'Witr', total: 3, type: 'witr' as const },
+    ],
+  },
+]
+
+function addTemplate(template: typeof QUICK_TEMPLATES[0]) {
+  const id = store.addPrayer(template.name, template.arabic, template.icon)
+  const def = store.customPrayerDefs.find(p => p.id === id)
+  if (def) {
+    store.updatePrayerPhases(id, template.phases)
+  }
+}
+
 </script>
 
 <template>
@@ -97,7 +178,31 @@ function doResetAll() {
     </div>
 
     <!-- Prayer list -->
-    <div class="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+    <div class="flex-1 overflow-y-auto px-4 py-4 pb-24 flex flex-col gap-3">
+      <!-- Empty state -->
+      <div v-if="store.customPrayerDefs.length === 0" class="text-center py-8">
+        <span class="text-4xl mb-3 block">🌅</span>
+        <p class="text-white/50 text-sm mb-2">No prayers yet.</p>
+        <p class="text-white/30 text-xs mb-6">Add your first prayer or use a template below.</p>
+
+        <!-- Quick templates -->
+        <div class="flex flex-col gap-2 px-4">
+          <button
+            v-for="template in QUICK_TEMPLATES"
+            :key="template.name"
+            class="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all active:scale-95 text-left"
+            @click="addTemplate(template)"
+          >
+            <span class="text-2xl">{{ template.icon }}</span>
+            <div class="flex-1">
+              <p class="text-white font-medium">{{ template.name }}</p>
+              <p class="text-white/40 text-xs">{{ template.arabic }}</p>
+            </div>
+            <span class="text-white/20 text-xs">{{ template.phases.length }} phases</span>
+          </button>
+        </div>
+      </div>
+
       <div
         v-for="def in store.customPrayerDefs"
         :key="def.id"
@@ -189,47 +294,64 @@ function doResetAll() {
               >
                 + Add Phase
               </button>
-              <!-- Reset to default -->
+              <!-- Delete prayer -->
               <button
-                :id="`reset-prayer-${def.id}`"
-                class="h-9 px-3 rounded-xl bg-white/5 border border-white/10 text-white/30 hover:text-white/60 active:scale-95 transition-all text-xs"
-                @click="store.resetPrayerToDefault(def.id)"
+                :id="`delete-prayer-${def.id}`"
+                class="h-9 px-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400/70 hover:text-red-400 hover:bg-red-500/20 active:scale-95 transition-all text-xs"
+                @click="onDeletePrayer(def.id)"
               >
-                ↺ Default
+                🗑️ Delete
               </button>
             </div>
           </div>
         </Transition>
       </div>
 
-      <!-- Reset all -->
-      <div class="mt-2">
-        <div v-if="!confirmResetAll">
-          <button
-            id="reset-all-plans"
-            class="w-full h-11 rounded-2xl bg-white/5 border border-white/10 text-white/30 hover:text-white/60 hover:bg-white/8 active:scale-95 transition-all text-sm"
-            @click="confirmResetAll = true"
-          >
-            Reset All Prayers to Default
-          </button>
+      <!-- Add new prayer form -->
+      <div class="mt-4 rounded-3xl border border-white/10 bg-white/[0.03] overflow-hidden">
+        <div class="px-4 py-3 border-b border-white/10">
+          <p class="text-white/60 text-sm font-medium">Add New Prayer</p>
         </div>
-        <div v-else class="flex gap-2">
+        <div class="px-4 py-4 flex flex-col gap-3">
+          <!-- Icon selector -->
+          <div class="flex gap-2 flex-wrap">
+            <button
+              v-for="icon in ICONS"
+              :key="icon"
+              class="w-10 h-10 rounded-xl border flex items-center justify-center text-xl transition-all"
+              :class="newIcon === icon ? 'bg-white/10 border-white/40' : 'border-white/10 hover:bg-white/5'"
+              @click="newIcon = icon"
+            >
+              {{ icon }}
+            </button>
+          </div>
+          <!-- Name inputs -->
+          <div class="flex gap-2">
+            <input
+              v-model="newName"
+              placeholder="Prayer name"
+              class="flex-1 h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-white/30"
+              @keyup.enter="onAddPrayer"
+            />
+            <input
+              v-model="newArabic"
+              placeholder="Arabic name (optional)"
+              class="flex-1 h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-white/30"
+              @keyup.enter="onAddPrayer"
+            />
+          </div>
+          <!-- Add button -->
           <button
-            id="confirm-reset-all"
-            class="flex-1 h-11 rounded-2xl bg-red-500/15 border border-red-500/30 text-red-400 font-semibold active:scale-95 transition-all text-sm"
-            @click="doResetAll"
+            id="add-new-prayer"
+            class="h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-medium hover:bg-emerald-500/25 active:scale-95 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="!newName.trim()"
+            @click="onAddPrayer"
           >
-            Yes, Reset All
-          </button>
-          <button
-            id="cancel-reset-all"
-            class="flex-1 h-11 rounded-2xl bg-white/5 border border-white/10 text-white/40 active:scale-95 transition-all text-sm"
-            @click="confirmResetAll = false"
-          >
-            Cancel
+            + Add Prayer
           </button>
         </div>
       </div>
+
     </div>
   </div>
 </template>

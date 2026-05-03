@@ -6,6 +6,12 @@ import { useLocalStorage } from '@vueuse/core'
 export type PhaseType = 'sunnah' | 'fardh' | 'witr' | 'nafl'
 export type PrayerState = 'idle' | 'in-progress' | 'completed'
 
+export interface Settings {
+  travelerMode: boolean
+  soundEnabled: boolean
+  vibrationEnabled: boolean
+}
+
 export interface Phase {
   label: string
   total: number
@@ -35,74 +41,21 @@ export interface SessionState {
   totalRakatsPrayed: number
 }
 
+export interface DailyHistory {
+  date: string
+  completedPrayers: string[]
+  totalRakats: number
+  prayers: Record<string, { name: string; completedAt: string; rakats: number }>
+}
+
 // ─── Defaults ─────────────────────────────────────────────────────────────────
 
-export const DEFAULT_PRAYER_DEFS: PrayerDef[] = [
-  {
-    id: 'fajr',
-    name: 'Fajr',
-    arabicName: 'الفجر',
-    icon: '🌅',
-    phases: [
-      { label: 'Sunnah', total: 2, type: 'sunnah' },
-      { label: 'Fardh', total: 2, type: 'fardh' },
-    ],
-  },
-  {
-    id: 'dhuhr',
-    name: 'Dhuhr',
-    arabicName: 'الظهر',
-    icon: '☀️',
-    phases: [
-      { label: 'Sunnah', total: 4, type: 'sunnah' },
-      { label: 'Fardh', total: 4, type: 'fardh' },
-      { label: 'Sunnah', total: 2, type: 'sunnah' },
-      { label: 'Nafl', total: 2, type: 'nafl' },
-    ],
-  },
-  {
-    id: 'asr',
-    name: 'Asr',
-    arabicName: 'العصر',
-    icon: '🌤️',
-    phases: [
-      { label: 'Sunnah', total: 4, type: 'sunnah' },
-      { label: 'Fardh', total: 4, type: 'fardh' },
-    ],
-  },
-  {
-    id: 'maghrib',
-    name: 'Maghrib',
-    arabicName: 'المغرب',
-    icon: '🌇',
-    phases: [
-      { label: 'Fardh', total: 3, type: 'fardh' },
-      { label: 'Sunnah', total: 2, type: 'sunnah' },
-      { label: 'Nafl', total: 2, type: 'nafl' },
-    ],
-  },
-  {
-    id: 'isha',
-    name: 'Isha',
-    arabicName: 'العشاء',
-    icon: '🌙',
-    phases: [
-      { label: 'Sunnah', total: 4, type: 'sunnah' },
-      { label: 'Fardh', total: 4, type: 'fardh' },
-      { label: 'Sunnah', total: 2, type: 'sunnah' },
-      { label: 'Witr', total: 3, type: 'witr' },
-    ],
-  },
-]
+export const DEFAULT_PRAYER_DEFS: PrayerDef[] = []
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getTodayKey(): string {
   return new Date().toISOString().slice(0, 10)
-}
-
-function cloneDefs(defs: PrayerDef[]): PrayerDef[] {
-  return defs.map(d => ({ ...d, phases: d.phases.map(ph => ({ ...ph })) }))
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -111,7 +64,7 @@ export const usePrayerStore = defineStore('prayer', () => {
   // ── Persisted: editable plan definitions ────────────────────────────────────
   const customPrayerDefs = useLocalStorage<PrayerDef[]>(
     'vitality-prayer-defs',
-    cloneDefs(DEFAULT_PRAYER_DEFS),
+    [],
   )
 
   // ── Persisted: daily completion statuses ────────────────────────────────────
@@ -120,34 +73,159 @@ export const usePrayerStore = defineStore('prayer', () => {
     statuses: Record<string, { state: PrayerState; completedAt?: string }>
   }>('vitality-prayer-daily', { date: getTodayKey(), statuses: {} })
 
+  // ── Persisted: settings ────────────────────────────────────────────────────
+  const settings = useLocalStorage<Settings>('vitality-settings', {
+    travelerMode: false,
+    soundEnabled: false,
+    vibrationEnabled: true,
+  })
+
+  // ── Persisted: history ─────────────────────────────────────────────────────
+  const history = useLocalStorage<DailyHistory[]>('vitality-history', [])
+
+  // ── Persisted: active session (for resume) ─────────────────────────────────
+  const savedSession = useLocalStorage<SessionState | null>('vitality-session', null)
+
   function ensureTodayData() {
     if (dailyStatus.value.date !== getTodayKey()) {
       dailyStatus.value = { date: getTodayKey(), statuses: {} }
+      // Clear any stale session when day changes
+      if (session.value.activePrayerId && !session.value.sessionCompleted) {
+        const prayerId = session.value.activePrayerId
+        const status = dailyStatus.value.statuses[prayerId]
+        if (status?.state === 'completed') {
+          dismissSession()
+        }
+      }
     }
   }
   ensureTodayData()
+
+  // ── Periodic date check (for midnight boundary) ────────────────────────────
+  let dateCheckInterval: ReturnType<typeof setInterval> | null = null
+
+  if (import.meta.client) {
+    dateCheckInterval = setInterval(() => {
+      ensureTodayData()
+    }, 60000) // Check every minute
+  }
+
+  // Cleanup on scope dispose
+  onScopeDispose(() => {
+    if (dateCheckInterval) {
+      clearInterval(dateCheckInterval)
+    }
+  })
+
+  // ── History helpers ──────────────────────────────────────────────────────────
+  function recordPrayerCompletion(prayer: Prayer, rakats: number) {
+    const today = getTodayKey()
+    let dayEntry = history.value.find(h => h.date === today)
+    if (!dayEntry) {
+      dayEntry = {
+        date: today,
+        completedPrayers: [],
+        totalRakats: 0,
+        prayers: {},
+      }
+      history.value = [dayEntry, ...history.value].slice(0, 90) // Keep 90 days
+    }
+    if (!dayEntry.completedPrayers.includes(prayer.id)) {
+      dayEntry.completedPrayers.push(prayer.id)
+      dayEntry.totalRakats += rakats
+      dayEntry.prayers[prayer.id] = {
+        name: prayer.name,
+        completedAt: new Date().toISOString(),
+        rakats,
+      }
+    }
+  }
+
+  function getHistoryForDate(date: string): DailyHistory | undefined {
+    return history.value.find(h => h.date === date)
+  }
+
+  function deleteHistoryEntry(date: string) {
+    history.value = history.value.filter(h => h.date !== date)
+  }
+
+  function getStreak(): number {
+    let streak = 0
+    const sorted = [...history.value].sort((a, b) => b.date.localeCompare(a.date))
+    const today = getTodayKey()
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+
+    // Check if today has any completed prayers
+    const todayEntry = sorted.find(h => h.date === today)
+    const hasToday = todayEntry && todayEntry.completedPrayers.length > 0
+
+    // Check yesterday
+    const hasYesterday = sorted.some(h => h.date === yesterday && h.completedPrayers.length > 0)
+
+    if (!hasToday && !hasYesterday) return 0
+
+    // Count consecutive days
+    let checkDate = hasToday ? today : yesterday
+    for (const entry of sorted) {
+      if (entry.date === checkDate && entry.completedPrayers.length > 0) {
+        streak++
+        // Move to previous day
+        const d = new Date(checkDate)
+        d.setDate(d.getDate() - 1)
+        checkDate = d.toISOString().slice(0, 10)
+      } else if (entry.date < checkDate) {
+        break
+      }
+    }
+    return streak
+  }
+
+  // ── Helper: apply traveler mode to phases ──────────────────────────────────
+  function applyTravelerMode(phases: Phase[]): Phase[] {
+    if (!settings.value.travelerMode) return phases
+    return phases.map(ph => {
+      if (ph.type === 'fardh') {
+        // Halve fardh counts, minimum 2, except Maghrib stays 3
+        const newTotal = Math.max(2, Math.floor(ph.total / 2))
+        return { ...ph, total: newTotal }
+      }
+      return ph
+    })
+  }
 
   // ── Computed: merged prayer list ─────────────────────────────────────────────
   const prayers = computed<Prayer[]>(() => {
     ensureTodayData()
     return customPrayerDefs.value.map(def => ({
       ...def,
-      phases: def.phases.map(ph => ({ ...ph })),
+      phases: applyTravelerMode(def.phases.map(ph => ({ ...ph }))),
       state: dailyStatus.value.statuses[def.id]?.state ?? 'idle',
       completedAt: dailyStatus.value.statuses[def.id]?.completedAt,
     }))
   })
 
-  // ── Session state (not persisted) ───────────────────────────────────────────
-  const session = ref<SessionState>({
-    activePrayerId: null,
-    currentPhaseIndex: 0,
-    currentRakatCount: 0,
-    sessionStartTime: null,
-    sessionCompleted: false,
-    phaseCompleted: false,
-    totalRakatsPrayed: 0,
-  })
+  // ── Session state ─────────────────────────────────────────────────────────
+  // Restore from saved session if exists and not completed
+  const session = ref<SessionState>(savedSession.value && !savedSession.value.sessionCompleted
+    ? savedSession.value
+    : {
+        activePrayerId: null,
+        currentPhaseIndex: 0,
+        currentRakatCount: 0,
+        sessionStartTime: null,
+        sessionCompleted: false,
+        phaseCompleted: false,
+        totalRakatsPrayed: 0,
+      })
+
+  // Watch and save session changes
+  watch(session, (val) => {
+    if (val.activePrayerId && !val.sessionCompleted) {
+      savedSession.value = val
+    } else {
+      savedSession.value = null
+    }
+  }, { deep: true })
 
   // ── Derived ─────────────────────────────────────────────────────────────────
 
@@ -200,11 +278,14 @@ export const usePrayerStore = defineStore('prayer', () => {
 
       if (nextIndex >= activePrayer.value.phases.length) {
         const id = session.value.activePrayerId!
+        const prayer = activePrayer.value
         ensureTodayData()
         dailyStatus.value.statuses[id] = {
           state: 'completed',
           completedAt: new Date().toISOString(),
         }
+        // Add to history
+        recordPrayerCompletion(prayer, session.value.totalRakatsPrayed)
         session.value.sessionCompleted = true
         return 'prayer-complete'
       }
@@ -242,6 +323,37 @@ export const usePrayerStore = defineStore('prayer', () => {
       phaseCompleted: false,
       totalRakatsPrayed: 0,
     }
+    savedSession.value = null
+  }
+
+  function hasActiveSession(): boolean {
+    return !!session.value.activePrayerId && !session.value.sessionCompleted
+  }
+
+  // ── Export/Import ───────────────────────────────────────────────────────────
+  function exportData(): string {
+    const data = {
+      prayers: customPrayerDefs.value,
+      settings: settings.value,
+      exportedAt: new Date().toISOString(),
+    }
+    return JSON.stringify(data, null, 2)
+  }
+
+  function importData(json: string): boolean {
+    try {
+      const data = JSON.parse(json)
+      if (data.prayers && Array.isArray(data.prayers)) {
+        customPrayerDefs.value = data.prayers
+        if (data.settings) {
+          settings.value = { ...settings.value, ...data.settings }
+        }
+        return true
+      }
+      return false
+    } catch {
+      return false
+    }
   }
 
   function resetAllPrayers() {
@@ -260,18 +372,44 @@ export const usePrayerStore = defineStore('prayer', () => {
     )
   }
 
+  function addPrayer(name: string, arabicName: string, icon: string) {
+    const id = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+    const newPrayer: PrayerDef = {
+      id,
+      name,
+      arabicName,
+      icon,
+      phases: [{ label: 'Sunnah', total: 2, type: 'sunnah' }],
+    }
+    customPrayerDefs.value = [...customPrayerDefs.value, newPrayer]
+    return id
+  }
+
+  function deletePrayer(prayerId: string) {
+    customPrayerDefs.value = customPrayerDefs.value.filter(p => p.id !== prayerId)
+  }
+
   function resetPrayerToDefault(prayerId: string) {
-    const def = DEFAULT_PRAYER_DEFS.find(p => p.id === prayerId)
-    if (!def) return
-    const idx = customPrayerDefs.value.findIndex(p => p.id === prayerId)
-    if (idx === -1) return
-    customPrayerDefs.value = customPrayerDefs.value.map((d, i) =>
-      i === idx ? cloneDefs([def])[0] : d,
-    )
+    // No defaults available - user creates all prayers
+    console.log('No preset prayers available')
   }
 
   function resetAllPlansToDefault() {
-    customPrayerDefs.value = cloneDefs(DEFAULT_PRAYER_DEFS)
+    // No defaults available - user creates all prayers
+    console.log('No preset prayers available')
+  }
+
+  // ── Settings actions ─────────────────────────────────────────────────────────
+  function toggleTravelerMode() {
+    settings.value.travelerMode = !settings.value.travelerMode
+  }
+
+  function toggleSound() {
+    settings.value.soundEnabled = !settings.value.soundEnabled
+  }
+
+  function toggleVibration() {
+    settings.value.vibrationEnabled = !settings.value.vibrationEnabled
   }
 
   return {
@@ -290,5 +428,19 @@ export const usePrayerStore = defineStore('prayer', () => {
     updatePrayerPhases,
     resetPrayerToDefault,
     resetAllPlansToDefault,
+    addPrayer,
+    deletePrayer,
+    settings,
+    toggleTravelerMode,
+    toggleSound,
+    toggleVibration,
+    history,
+    getHistoryForDate,
+    getStreak,
+    hasActiveSession,
+    savedSession,
+    exportData,
+    importData,
+    deleteHistoryEntry,
   }
 })

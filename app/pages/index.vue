@@ -11,16 +11,29 @@ const store = usePrayerStore()
 const showCanvas = ref(false)
 const showComplete = ref(false)
 const showPlans = ref(false)
+const showDhikr = ref(false)
+const showSettings = ref(false)
+const showHistory = ref(false)
 
 function startPrayer(prayerId: string) {
   store.selectPrayer(prayerId)
   showCanvas.value = true
   showComplete.value = false
+  showDhikr.value = false
 }
 
 function onPrayerComplete() {
   showComplete.value = true
   showCanvas.value = false
+}
+
+function onSessionCompleteFinished() {
+  showComplete.value = false
+  showDhikr.value = true
+}
+
+function onDhikrFinished() {
+  showDhikr.value = false
 }
 
 function onBackToDashboard() {
@@ -39,14 +52,24 @@ function onBackToDashboard() {
           v-if="showCanvas"
           class="fixed inset-0 z-40"
           @complete="onPrayerComplete"
+          @open-plans="showCanvas = false; showPlans = true"
+          @open-settings="showCanvas = false; showSettings = true"
         />
       </Transition>
 
       <!-- ── SESSION COMPLETE OVERLAY ── -->
       <SessionComplete
         v-if="showComplete"
-        @back="onBackToDashboard"
+        @back="onSessionCompleteFinished"
       />
+
+      <!-- ── DHIKR COUNTER ── -->
+      <Transition name="slide-up">
+        <DhikrCounter
+          v-if="showDhikr"
+          @close="onDhikrFinished"
+        />
+      </Transition>
 
       <!-- ── PLAN EDITOR ── -->
       <Transition name="slide-up">
@@ -56,8 +79,50 @@ function onBackToDashboard() {
         />
       </Transition>
 
+      <!-- ── SETTINGS PANEL ── -->
+      <Transition name="slide-up">
+        <SettingsPanel
+          v-if="showSettings"
+          @close="showSettings = false"
+        />
+      </Transition>
+
+      <!-- ── HISTORY VIEW ── -->
+      <Transition name="slide-up">
+        <HistoryView
+          v-if="showHistory"
+          @close="showHistory = false"
+        />
+      </Transition>
+
       <!-- ── DASHBOARD ── -->
       <div class="flex flex-col min-h-screen">
+
+        <!-- Resume session banner -->
+        <Transition name="slide-down">
+          <div
+            v-if="store.hasActiveSession()"
+            class="mx-4 mt-2 mb-2 rounded-2xl bg-amber-500/10 border border-amber-500/20 px-4 py-3"
+          >
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center animate-pulse">
+                  <span class="text-amber-400 text-lg">▶</span>
+                </div>
+                <div>
+                  <p class="text-white font-medium text-sm">Prayer in progress</p>
+                  <p class="text-white/50 text-xs">{{ store.activePrayer?.name }} — {{ store.currentPhase?.label }}</p>
+                </div>
+              </div>
+              <button
+                class="bg-amber-500 hover:bg-amber-400 text-[#080c14] px-4 py-2 rounded-xl font-semibold text-sm active:scale-95 transition-all"
+                @click="showCanvas = true"
+              >
+                Resume
+              </button>
+            </div>
+          </div>
+        </Transition>
 
         <!-- Header -->
         <header class="pt-14 pb-6 px-6">
@@ -65,6 +130,14 @@ function onBackToDashboard() {
             <div>
               <p class="text-white/40 text-xs uppercase tracking-[0.25em] mb-1">Bismillah</p>
               <h1 class="text-white text-2xl font-black">Vitality Prayer</h1>
+            </div>
+            <div class="flex items-center gap-2">
+              <button
+                class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-all active:scale-95"
+                @click="showHistory = true"
+              >
+                <span class="text-lg">📊</span>
+              </button>
             </div>
             <div class="flex flex-col items-end gap-1">
               <div class="flex gap-1.5">
@@ -81,7 +154,7 @@ function onBackToDashboard() {
                   "
                 />
               </div>
-              <p class="text-white/30 text-xs">{{ store.completedPrayersCount }}/5 today</p>
+              <p class="text-white/30 text-xs">{{ store.completedPrayersCount }}/{{ store.prayers.length }} today</p>
             </div>
           </div>
 
@@ -89,7 +162,7 @@ function onBackToDashboard() {
           <div class="w-full h-1 bg-white/10 rounded-full overflow-hidden">
             <div
               class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-700"
-              :style="{ width: `${(store.completedPrayersCount / 5) * 100}%` }"
+              :style="{ width: `${store.prayers.length > 0 ? (store.completedPrayersCount / store.prayers.length) * 100 : 0}%` }"
             />
           </div>
         </header>
@@ -178,6 +251,17 @@ function onBackToDashboard() {
           </button>
         </div>
 
+        <!-- Traveler mode indicator -->
+        <div
+          v-if="store.settings.travelerMode"
+          class="px-4 pb-2"
+        >
+          <div class="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 flex items-center gap-2">
+            <span class="text-amber-400 text-sm">✈️</span>
+            <span class="text-amber-400/80 text-xs">Traveler Mode: Fardh prayers shortened</span>
+          </div>
+        </div>
+
         <!-- Bottom nav -->
         <nav class="px-4 pb-8 pt-2">
           <div class="bg-white/5 border border-white/10 rounded-3xl px-4 py-3 flex items-center justify-around backdrop-blur-sm">
@@ -200,12 +284,21 @@ function onBackToDashboard() {
               <span class="text-[10px] font-medium">My Plan</span>
             </button>
             <button
+              id="nav-settings"
+              class="flex flex-col items-center gap-1 text-white/30 hover:text-white/60 transition-colors"
+              :class="showSettings ? 'text-white' : ''"
+              @click="showSettings = true"
+            >
+              <span class="text-xl">⚙️</span>
+              <span class="text-[10px] font-medium">Settings</span>
+            </button>
+            <button
               id="nav-reset"
               class="flex flex-col items-center gap-1 text-white/30 hover:text-white/60 transition-colors"
               @click="store.resetAllPrayers()"
             >
               <span class="text-xl">↺</span>
-              <span class="text-[10px] font-medium">Reset Day</span>
+              <span class="text-[10px] font-medium">Reset</span>
             </button>
           </div>
         </nav>
@@ -227,6 +320,18 @@ function onBackToDashboard() {
 }
 .slide-up-leave-to {
   transform: translateY(100%);
+  opacity: 0;
+}
+
+.slide-down-enter-active {
+  transition: all 0.3s cubic-bezier(0.34, 1.1, 0.64, 1);
+}
+.slide-down-leave-active {
+  transition: all 0.2s ease-in;
+}
+.slide-down-enter-from,
+.slide-down-leave-to {
+  transform: translateY(-20px);
   opacity: 0;
 }
 </style>
