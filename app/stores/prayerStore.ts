@@ -118,14 +118,14 @@ export const usePrayerStore = defineStore('prayer', () => {
   // ── Persisted: editable plan definitions ────────────────────────────────────
   const customPrayerDefs = useLocalStorage<PrayerDef[]>(
     'vitality-prayer-defs',
-    DEFAULT_PRAYER_DEFS,
+    [], // Start empty to avoid hydration overwrite
   )
 
   // ── Persisted: daily completion statuses ────────────────────────────────────
   const dailyStatus = useLocalStorage<{
     date: string
     statuses: Record<string, { state: PrayerState; completedAt?: string }>
-  }>('vitality-prayer-daily', { date: getTodayKey(), statuses: {} })
+  }>('vitality-prayer-daily', { date: '', statuses: {} })
 
   // ── Persisted: settings ────────────────────────────────────────────────────
   const settings = useLocalStorage<Settings>('vitality-settings', {
@@ -133,6 +133,16 @@ export const usePrayerStore = defineStore('prayer', () => {
     soundEnabled: false,
     vibrationEnabled: true,
   })
+
+  // Initialize defaults on client if empty
+  if (import.meta.client) {
+    if (customPrayerDefs.value.length === 0) {
+      customPrayerDefs.value = JSON.parse(JSON.stringify(DEFAULT_PRAYER_DEFS))
+    }
+    if (!dailyStatus.value.date) {
+      dailyStatus.value = { date: getTodayKey(), statuses: {} }
+    }
+  }
 
   // ── Persisted: history ─────────────────────────────────────────────────────
   const history = useLocalStorage<DailyHistory[]>('vitality-history', [])
@@ -250,8 +260,8 @@ export const usePrayerStore = defineStore('prayer', () => {
   // ── Computed: merged prayer list ─────────────────────────────────────────────
   const prayers = computed<Prayer[]>(() => {
     ensureTodayData()
-    // Use defaults if user has no custom prayers
-    const defs = customPrayerDefs.value.length > 0 ? customPrayerDefs.value : DEFAULT_PRAYER_DEFS
+    // Use defaults if user has no custom prayers (should be populated on client)
+    const defs = customPrayerDefs.value.length > 0 ? customPrayerDefs.value : (import.meta.server ? DEFAULT_PRAYER_DEFS : [])
     return defs.map(def => ({
       ...def,
       phases: applyTravelerMode(def.phases.map(ph => ({ ...ph }))),
