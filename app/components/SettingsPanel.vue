@@ -47,7 +47,7 @@ function handleImport(event: Event) {
 
 <template>
   <div
-    class="fixed inset-0 z-50 flex flex-col"
+    class="h-full w-full flex flex-col"
     style="background: #080c14;"
   >
     <!-- Header -->
@@ -65,9 +65,9 @@ function handleImport(event: Event) {
     </div>
 
     <!-- Settings list -->
-    <div class="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+    <div class="flex-1 overflow-y-auto px-4 py-4 pb-20 flex flex-col gap-3 custom-scrollbar">
       <!-- Traveler Mode -->
-      <div class="rounded-3xl border border-white/10 bg-white/[0.03] overflow-hidden">
+      <div class="rounded-3xl border border-white/10 bg-white/[0.03] overflow-hidden flex-shrink-0">
         <div class="px-4 py-4">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
@@ -102,7 +102,7 @@ function handleImport(event: Event) {
       </div>
 
       <!-- Sound -->
-      <div class="rounded-3xl border border-white/10 bg-white/[0.03] overflow-hidden">
+      <div class="rounded-3xl border border-white/10 bg-white/[0.03] overflow-hidden flex-shrink-0">
         <div class="px-4 py-4 flex items-center justify-between">
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-xl bg-sky-500/15 flex items-center justify-center text-xl">
@@ -127,7 +127,7 @@ function handleImport(event: Event) {
       </div>
 
       <!-- Vibration -->
-      <div class="rounded-3xl border border-white/10 bg-white/[0.03] overflow-hidden">
+      <div class="rounded-3xl border border-white/10 bg-white/[0.03] overflow-hidden flex-shrink-0">
         <div class="px-4 py-4 flex items-center justify-between">
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-xl bg-violet-500/15 flex items-center justify-center text-xl">
@@ -152,7 +152,7 @@ function handleImport(event: Event) {
       </div>
 
       <!-- Export/Import -->
-      <div class="mt-6 rounded-3xl border border-white/10 bg-white/[0.03] overflow-hidden">
+      <div class="mt-6 rounded-3xl border border-white/10 bg-white/[0.03] overflow-hidden flex-shrink-0">
         <div class="px-4 py-3 border-b border-white/10">
           <p class="text-white/60 text-sm font-medium">Backup & Restore</p>
         </div>

@@ -46,68 +46,7 @@ function onBackToDashboard() {
 <template>
   <main class="h-dvh bg-[#080c14] flex justify-center overflow-hidden">
     <div class="w-full max-w-md h-full relative">
-      <!-- ── PRAYER CANVAS (immersive counter) ── -->
-      <Transition name="slide-up">
-        <PrayerCanvas
-          v-if="showCanvas"
-          class="absolute inset-0 z-40"
-          @complete="onPrayerComplete"
-          @open-plans="
-            showCanvas = false;
-            showPlans = true;
-          "
-          @open-settings="
-            showCanvas = false;
-            showSettings = true;
-          "
-          @switch-prayer="() => {}"
-        />
-      </Transition>
-
-      <!-- ── SESSION COMPLETE OVERLAY ── -->
-      <SessionComplete
-        v-if="showComplete"
-        class="absolute inset-0 z-50"
-        @back="onSessionCompleteFinished"
-      />
-
-      <!-- ── DHIKR COUNTER ── -->
-      <Transition name="slide-up">
-        <DhikrCounter
-          v-if="showDhikr"
-          class="absolute inset-0 z-50"
-          @close="onDhikrFinished"
-        />
-      </Transition>
-
-      <!-- ── PLAN EDITOR ── -->
-      <Transition name="slide-up">
-        <PlanEditor
-          v-if="showPlans"
-          class="absolute inset-0 z-50"
-          @close="showPlans = false"
-        />
-      </Transition>
-
-      <!-- ── SETTINGS PANEL ── -->
-      <Transition name="slide-up">
-        <SettingsPanel
-          v-if="showSettings"
-          class="absolute inset-0 z-50"
-          @close="showSettings = false"
-        />
-      </Transition>
-
-      <!-- ── HISTORY VIEW ── -->
-      <Transition name="slide-up">
-        <HistoryView
-          v-if="showHistory"
-          class="absolute inset-0 z-50"
-          @close="showHistory = false"
-        />
-      </Transition>
-
-      <!-- ── DASHBOARD ── -->
+      <!-- ── DASHBOARD (Base Layer) ── -->
       <div class="flex flex-col h-full">
         <!-- Resume session banner -->
         <Transition name="slide-down">
@@ -151,28 +90,29 @@ function onBackToDashboard() {
               </p>
               <h1 class="text-white text-2xl font-black">Vitality Prayer</h1>
             </div>
-            <div class="flex items-center gap-2">
-              <button
-                class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-all active:scale-95"
-                @click="showHistory = true"
-              >
-                <span class="text-lg">📊</span>
-              </button>
-            </div>
+            
             <div class="flex flex-col items-end gap-1">
-              <div class="flex gap-1.5">
-                <div
-                  v-for="prayer in store.prayers"
-                  :key="prayer.id"
-                  class="w-2 h-2 rounded-full transition-all duration-500"
-                  :class="
-                    prayer.state === 'completed'
-                      ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50'
-                      : prayer.state === 'in-progress'
-                        ? 'bg-amber-400 animate-pulse'
-                        : 'bg-white/15'
-                  "
-                />
+              <div class="flex items-center gap-3">
+                <div class="flex gap-1.5">
+                  <div
+                    v-for="prayer in store.prayers"
+                    :key="prayer.id"
+                    class="w-2 h-2 rounded-full transition-all duration-500"
+                    :class="
+                      prayer.state === 'completed'
+                        ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50'
+                        : prayer.state === 'in-progress'
+                          ? 'bg-amber-400 animate-pulse'
+                          : 'bg-white/15'
+                    "
+                  />
+                </div>
+                <button
+                  class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-all active:scale-95 ml-1"
+                  @click="showHistory = true"
+                >
+                  <span class="text-sm">📊</span>
+                </button>
               </div>
               <p class="text-white/30 text-xs">
                 {{ store.completedPrayersCount }}/{{
@@ -202,7 +142,7 @@ function onBackToDashboard() {
             v-for="prayer in store.prayers"
             :id="`prayer-btn-${prayer.id}`"
             :key="prayer.id"
-            class="relative w-full text-left rounded-3xl overflow-hidden transition-all duration-200 active:scale-[0.97]"
+            class="relative w-full text-left rounded-3xl overflow-hidden transition-all duration-200 active:scale-[0.97] flex-shrink-0"
             :class="prayer.state === 'completed' ? 'opacity-70' : 'opacity-100'"
             @click="startPrayer(prayer.id)"
           >
@@ -285,7 +225,7 @@ function onBackToDashboard() {
         </div>
 
         <!-- Traveler mode indicator -->
-        <div v-if="store.settings.travelerMode" class="px-4 pb-2">
+        <div v-if="store.settings.travelerMode" class="px-4 pb-2 flex-shrink-0">
           <div
             class="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 flex items-center gap-2"
           >
@@ -297,7 +237,7 @@ function onBackToDashboard() {
         </div>
 
         <!-- Bottom nav -->
-        <nav class="px-4 pb-8 pt-2">
+        <nav class="px-4 pb-8 pt-2 flex-shrink-0">
           <div
             class="bg-white/5 border border-white/10 rounded-3xl px-4 py-3 flex items-center justify-around backdrop-blur-sm"
           >
@@ -341,6 +281,71 @@ function onBackToDashboard() {
           </div>
         </nav>
       </div>
+
+      <!-- ── OVERLAYS (Higher Layer) ── -->
+      <!-- Rendered after dashboard to ensure they are on top -->
+      
+      <!-- Prayer Canvas -->
+      <Transition name="slide-up">
+        <PrayerCanvas
+          v-if="showCanvas"
+          class="absolute inset-0 z-[60]"
+          @complete="onPrayerComplete"
+          @open-plans="
+            showCanvas = false;
+            showPlans = true;
+          "
+          @open-settings="
+            showCanvas = false;
+            showSettings = true;
+          "
+          @switch-prayer="() => {}"
+        />
+      </Transition>
+
+      <!-- Session Complete -->
+      <SessionComplete
+        v-if="showComplete"
+        class="absolute inset-0 z-[70]"
+        @back="onSessionCompleteFinished"
+      />
+
+      <!-- Dhikr Counter -->
+      <Transition name="slide-up">
+        <DhikrCounter
+          v-if="showDhikr"
+          class="absolute inset-0 z-[70]"
+          @close="onDhikrFinished"
+        />
+      </Transition>
+
+      <!-- Plan Editor -->
+      <Transition name="slide-up">
+        <PlanEditor
+          v-if="showPlans"
+          class="absolute inset-0 z-[80]"
+          @close="showPlans = false"
+        />
+      </Transition>
+
+      <!-- Settings Panel -->
+      <Transition name="slide-up">
+        <SettingsPanel
+          v-if="showSettings"
+          class="absolute inset-0 z-[80]"
+          @close="showSettings = false"
+        />
+      </Transition>
+
+      <!-- History View -->
+      <Transition name="slide-up">
+        <HistoryView
+          v-if="showHistory"
+          class="absolute inset-0 z-[80]"
+          @close="showHistory = false"
+        />
+      </Transition>
+
     </div>
   </main>
 </template>

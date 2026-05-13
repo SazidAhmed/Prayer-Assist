@@ -48,7 +48,7 @@ function deleteEntry(date: string) {
 
 <template>
   <div
-    class="fixed inset-0 z-50 flex flex-col"
+    class="h-full w-full flex flex-col"
     style="background: #080c14;"
   >
     <!-- Header -->
@@ -66,7 +66,7 @@ function deleteEntry(date: string) {
     </div>
 
     <!-- Content -->
-    <div class="flex-1 overflow-y-auto px-4 py-4">
+    <div class="flex-1 overflow-y-auto px-4 py-4 pb-20 custom-scrollbar">
       <!-- Stats overview -->
       <div class="grid grid-cols-3 gap-3 mb-6">
         <div class="rounded-2xl bg-white/5 border border-white/10 p-4 text-center">

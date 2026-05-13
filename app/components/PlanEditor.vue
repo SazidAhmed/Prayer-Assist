@@ -170,7 +170,7 @@ function addTemplate(template: typeof QUICK_TEMPLATES[0]) {
 <template>
   <!-- Backdrop -->
   <div
-    class="fixed inset-0 z-50 flex flex-col"
+    class="h-full w-full flex flex-col"
     style="background: #080c14;"
   >
     <!-- Header -->
@@ -189,7 +189,54 @@ function addTemplate(template: typeof QUICK_TEMPLATES[0]) {
     </div>
 
     <!-- Prayer list -->
-    <div class="flex-1 overflow-y-auto px-4 py-4 pb-24 flex flex-col gap-3">
+    <div class="flex-1 overflow-y-auto px-4 py-4 pb-32 flex flex-col gap-3 custom-scrollbar">
+      <!-- Add new prayer form (Moved to top) -->
+      <div class="mb-4 rounded-3xl border border-white/10 bg-white/[0.03] overflow-hidden flex-shrink-0">
+        <div class="px-4 py-3 border-b border-white/10">
+          <p class="text-white/60 text-sm font-medium">Add New Prayer</p>
+        </div>
+        <div class="px-4 py-4 flex flex-col gap-3">
+          <!-- Icon selector -->
+          <div class="flex gap-2 flex-wrap">
+            <button
+              v-for="icon in ICONS"
+              :key="icon"
+              class="w-10 h-10 rounded-xl border flex items-center justify-center text-xl transition-all"
+              :class="newIcon === icon ? 'bg-white/10 border-white/40' : 'border-white/10 hover:bg-white/5'"
+              @click="newIcon = icon"
+            >
+              {{ icon }}
+            </button>
+          </div>
+          <!-- Name inputs -->
+          <div class="flex gap-2">
+            <input
+              v-model="newName"
+              placeholder="Prayer name"
+              class="flex-1 h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-white/30"
+              @keyup.enter="onAddPrayer"
+            />
+            <input
+              v-model="newArabic"
+              placeholder="Arabic name (optional)"
+              class="flex-1 h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-white/30"
+              @keyup.enter="onAddPrayer"
+            />
+          </div>
+          <!-- Add button -->
+          <button
+            id="add-new-prayer"
+            class="h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-medium hover:bg-emerald-500/25 active:scale-95 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="!newName.trim()"
+            @click="onAddPrayer"
+          >
+            + Add Prayer
+          </button>
+        </div>
+      </div>
+
+      <div class="h-px bg-white/10 my-2 flex-shrink-0" />
+
       <!-- Empty state -->
       <div v-if="store.customPrayerDefs.length === 0" class="text-center py-8">
         <span class="text-4xl mb-3 block">🌅</span>
@@ -207,7 +254,7 @@ function addTemplate(template: typeof QUICK_TEMPLATES[0]) {
       <div
         v-for="def in store.customPrayerDefs"
         :key="def.id"
-        class="rounded-3xl border border-white/10 overflow-hidden"
+        class="rounded-3xl border border-white/10 overflow-hidden flex-shrink-0"
         :class="expandedId === def.id ? 'bg-white/[0.05]' : 'bg-white/[0.03]'"
       >
         <!-- Prayer row header -->
@@ -309,50 +356,7 @@ function addTemplate(template: typeof QUICK_TEMPLATES[0]) {
         </Transition>
       </div>
 
-      <!-- Add new prayer form -->
-      <div class="mt-4 rounded-3xl border border-white/10 bg-white/[0.03] overflow-hidden">
-        <div class="px-4 py-3 border-b border-white/10">
-          <p class="text-white/60 text-sm font-medium">Add New Prayer</p>
-        </div>
-        <div class="px-4 py-4 flex flex-col gap-3">
-          <!-- Icon selector -->
-          <div class="flex gap-2 flex-wrap">
-            <button
-              v-for="icon in ICONS"
-              :key="icon"
-              class="w-10 h-10 rounded-xl border flex items-center justify-center text-xl transition-all"
-              :class="newIcon === icon ? 'bg-white/10 border-white/40' : 'border-white/10 hover:bg-white/5'"
-              @click="newIcon = icon"
-            >
-              {{ icon }}
-            </button>
-          </div>
-          <!-- Name inputs -->
-          <div class="flex gap-2">
-            <input
-              v-model="newName"
-              placeholder="Prayer name"
-              class="flex-1 h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-white/30"
-              @keyup.enter="onAddPrayer"
-            />
-            <input
-              v-model="newArabic"
-              placeholder="Arabic name (optional)"
-              class="flex-1 h-10 px-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-white/30"
-              @keyup.enter="onAddPrayer"
-            />
-          </div>
-          <!-- Add button -->
-          <button
-            id="add-new-prayer"
-            class="h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-medium hover:bg-emerald-500/25 active:scale-95 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            :disabled="!newName.trim()"
-            @click="onAddPrayer"
-          >
-            + Add Prayer
-          </button>
-        </div>
-      </div>
+
 
     </div>
   </div>
