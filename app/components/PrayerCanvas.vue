@@ -210,11 +210,7 @@ const phaseGlow = computed(() => {
 <template>
   <div
     id="prayer-canvas"
-    class="relative h-full w-full flex flex-col items-center justify-center select-none overflow-hidden"
-    :class="[
-      'bg-[#080c14]',
-      isFlashing ? 'bg-opacity-90' : '',
-    ]"
+    class="h-full w-full flex flex-col items-center justify-center select-none overflow-hidden bg-[#080c14]"
     @click="handleTap"
     @touchstart.prevent="handleTap"
   >
@@ -359,7 +355,7 @@ const phaseGlow = computed(() => {
     </div>
 
     <!-- Prayer navigation -->
-    <nav class="absolute bottom-0 left-0 right-0 px-4 pb-8 pt-2 z-30">
+    <nav class="absolute bottom-0 left-0 right-0 px-4 pb-10 pt-2 z-30 sm:pb-8">
       <div class="bg-white/5 border border-white/10 rounded-3xl px-3 py-3 flex items-center justify-around backdrop-blur-sm">
         <button
           v-for="prayer in store.prayers"

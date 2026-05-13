@@ -21,7 +21,7 @@ function handleBack() {
 <template>
   <div
     id="session-complete"
-    class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#080c14] px-8"
+    class="h-full w-full flex flex-col items-center justify-center bg-[#080c14] px-8"
   >
     <div class="absolute inset-0 pointer-events-none overflow-hidden">
       <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-emerald-500/10 blur-3xl animate-pulse" />

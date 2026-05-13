@@ -68,7 +68,7 @@ const phaseGlow = computed(() => {
 <template>
   <div
     id="dhikr-counter"
-    class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#080c14] select-none"
+    class="h-full w-full flex flex-col items-center justify-center bg-[#080c14] select-none"
     @click="handleTap"
     @touchstart.prevent="handleTap"
   >
